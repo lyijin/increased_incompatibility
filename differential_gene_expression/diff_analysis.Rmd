@@ -1,0 +1,179 @@
+---
+title: "Differential Analysis of CC7 H2 CC7-SSB01 Temperature RNAseq data"
+author: "cuig"
+date: "July 31, 2016"
+output:
+  html_document:
+    toc: true
+    toc_depth: 5
+    toc_float: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+`kallisto index -i aip.genome_models.mRNA.idx aip.genome_models.mRNA.fa`
+
+> 
+```
+[build] loading fasta file aip.genome_models.mRNA.fa
+[build] k-mer length: 31
+[build] warning: clipped off poly-A tail (longer than 10)
+        from 13 target sequences
+[build] warning: replaced 1305686 non-ACGUT characters in the input sequence
+        with pseudorandom nucleotides
+[build] counting k-mers ... done.
+[build] building target de Bruijn graph ...  done
+[build] creating equivalence classes ...  done
+[build] target de Bruijn graph has 482414 contigs and contains 62901627 k-mers
+```
+
+
+```
+for a in CC7 H2 SSB01; do for b in 25 32; do for c in {1..4}; do kallisto quant -i aip.genome_models.mRNA.idx -o kallisto/${a}-${b}-${c}/ --single -l 200 -s 20 -b 100 -t 32 raw_reads/*${a}-${b}-${c}*.fastq; done; done; done
+```
+
+## load libraries
+```{r,message=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggfortify)
+library(sleuth)
+library(UpSetR)
+library(pheatmap)
+```
+
+## prepare sample tables for the analysis
+```{r}
+base_dir <- 'BASE_DIR'
+
+setwd(base_dir)
+sample_id <- dir(file.path(base_dir, "kallisto"))
+kal_dirs <- sapply(sample_id, function(id) file.path(base_dir, 'kallisto', id))
+s2c <- data.frame(sample = sample_id, 
+                  host = rep(c("CC7", "H2", "CC7"), each = 8), 
+                  symbiont = rep(c("A", "B", "B"), each = 8),
+                  temp = rep(c("25", "32"), each = 4))
+s2c$condition <- paste(s2c$host, s2c$symbiont, s2c$temp, sep = "")
+s2c <- dplyr::mutate(s2c, path = kal_dirs)
+s2c_cc7 <- s2c[c(1:8, 17:24),]
+```
+
+
+## cc7_temp32_vs_temp25
+### load data from kallisto - sleuth log
+```{r}
+cc7_temp32_vs_temp25 <- sleuth::sleuth_prep(s2c[1:8,], ~ temp)
+cc7_temp32_vs_temp25 <- sleuth::sleuth_fit(cc7_temp32_vs_temp25)
+cc7_temp32_vs_temp25 <- sleuth::sleuth_wt(cc7_temp32_vs_temp25, 'temp32')
+```
+
+### extract data from sleuth output
+- **kallisto table (kt)**
+```{r}
+cc7_temp32_vs_temp25_kt <- kallisto_table(cc7_temp32_vs_temp25, use_filtered = FALSE, normalized = FALSE, include_covariates = FALSE)
+summary(cc7_temp32_vs_temp25_kt)
+write.csv(cc7_temp32_vs_temp25_kt, file = 'cc7_temp32_vs_temp25_kt.csv', row.names = FALSE)
+cc7_temp32_vs_temp25_fil_kt <- kallisto_table(cc7_temp32_vs_temp25, use_filtered = TRUE, normalized = TRUE,include_covariates = FALSE)
+summary(cc7_temp32_vs_temp25_fil_kt)
+write.csv(cc7_temp32_vs_temp25_fil_kt, file = 'cc7_temp32_vs_temp25_fil_kt.csv', row.names = FALSE)
+```
+
+- **result table (rt)**
+```{r}
+cc7_temp32_vs_temp25_rt <- sleuth_results(cc7_temp32_vs_temp25, 'temp32')
+summary(cc7_temp32_vs_temp25_rt)
+write.csv(cc7_temp32_vs_temp25_rt, file = 'cc7_temp32_vs_temp25_rt.csv', row.names = FALSE)
+```
+
+- **diff expr trans table (diff)**
+```{r}
+cc7_temp32_vs_temp25_diff <- subset(cc7_temp32_vs_temp25_rt, qval<=0.05)
+dim(cc7_temp32_vs_temp25_diff)
+summary(cc7_temp32_vs_temp25_diff)
+write.csv(cc7_temp32_vs_temp25_diff, file = 'cc7_temp32_vs_temp25_diff.csv', row.names = FALSE)
+cc7_temp32_vs_temp25_diff_id <- cc7_temp32_vs_temp25_diff[,1]
+write.csv(cc7_temp32_vs_temp25_diff_id, file = 'cc7_temp32_vs_temp25_diff_id.csv', row.names = FALSE)
+```
+
+
+## h2_temp32_vs_temp25
+### load data from kallisto - sleuth log
+```{r}
+h2_temp32_vs_temp25 <- sleuth::sleuth_prep(s2c[10:16,], ~ temp)
+h2_temp32_vs_temp25 <- sleuth::sleuth_fit(h2_temp32_vs_temp25)
+h2_temp32_vs_temp25 <- sleuth::sleuth_wt(h2_temp32_vs_temp25, 'temp32')
+```
+
+### extract data from sleuth output
+- **kallisto table (kt)**
+```{r}
+h2_temp32_vs_temp25_kt <- kallisto_table(h2_temp32_vs_temp25, use_filtered = FALSE, normalized = FALSE, include_covariates = FALSE)
+summary(h2_temp32_vs_temp25_kt)
+write.csv(h2_temp32_vs_temp25_kt, file = 'h2_temp32_vs_temp25_kt.csv', row.names = FALSE)
+h2_temp32_vs_temp25_fil_kt <- kallisto_table(h2_temp32_vs_temp25, use_filtered = TRUE, normalized = TRUE,include_covariates = FALSE)
+summary(h2_temp32_vs_temp25_fil_kt)
+write.csv(h2_temp32_vs_temp25_fil_kt, file = 'h2_temp32_vs_temp25_fil_kt.csv', row.names = FALSE)
+```
+
+- **result table (rt)**
+```{r}
+h2_temp32_vs_temp25_rt <- sleuth_results(h2_temp32_vs_temp25, 'temp32')
+summary(h2_temp32_vs_temp25_rt)
+write.csv(h2_temp32_vs_temp25_rt, file = 'h2_temp32_vs_temp25_rt.csv', row.names = FALSE)
+```
+
+- **diff expr trans table (diff)**
+```{r}
+h2_temp32_vs_temp25_diff <- subset(h2_temp32_vs_temp25_rt, qval<=0.05)
+dim(h2_temp32_vs_temp25_diff)
+summary(h2_temp32_vs_temp25_diff)
+write.csv(h2_temp32_vs_temp25_diff, file = 'h2_temp32_vs_temp25_diff.csv', row.names = FALSE)
+h2_temp32_vs_temp25_diff_id <- h2_temp32_vs_temp25_diff[,1]
+write.csv(h2_temp32_vs_temp25_diff_id, file = 'h2_temp32_vs_temp25_diff_id.csv', row.names = FALSE)
+```
+
+
+## ssb01_temp32_vs_temp25
+### load data from kallisto - sleuth log
+```{r}
+ssb01_temp32_vs_temp25 <- sleuth::sleuth_prep(s2c[17:24,], ~ temp)
+ssb01_temp32_vs_temp25 <- sleuth::sleuth_fit(ssb01_temp32_vs_temp25)
+ssb01_temp32_vs_temp25 <- sleuth::sleuth_wt(ssb01_temp32_vs_temp25, 'temp32')
+```
+
+### extract data from sleuth output
+- **kallisto table (kt)**
+```{r}
+ssb01_temp32_vs_temp25_kt <- kallisto_table(ssb01_temp32_vs_temp25, use_filtered = FALSE, normalized = FALSE, include_covariates = FALSE)
+summary(ssb01_temp32_vs_temp25_kt)
+write.csv(ssb01_temp32_vs_temp25_kt, file = 'ssb01_temp32_vs_temp25_kt.csv', row.names = FALSE)
+ssb01_temp32_vs_temp25_fil_kt <- kallisto_table(ssb01_temp32_vs_temp25, use_filtered = TRUE, normalized = TRUE,include_covariates = FALSE)
+summary(ssb01_temp32_vs_temp25_fil_kt)
+write.csv(ssb01_temp32_vs_temp25_fil_kt, file = 'ssb01_temp32_vs_temp25_fil_kt.csv', row.names = FALSE)
+```
+
+- **result table (rt)**
+```{r}
+ssb01_temp32_vs_temp25_rt <- sleuth_results(ssb01_temp32_vs_temp25, 'temp32')
+summary(ssb01_temp32_vs_temp25_rt)
+write.csv(ssb01_temp32_vs_temp25_rt, file = 'ssb01_temp32_vs_temp25_rt.csv', row.names = FALSE)
+```
+
+- **diff expr trans table (diff)**
+```{r}
+ssb01_temp32_vs_temp25_diff <- subset(ssb01_temp32_vs_temp25_rt, qval<=0.05)
+dim(ssb01_temp32_vs_temp25_diff)
+summary(ssb01_temp32_vs_temp25_diff)
+write.csv(ssb01_temp32_vs_temp25_diff, file = 'ssb01_temp32_vs_temp25_diff.csv', row.names = FALSE)
+ssb01_temp32_vs_temp25_diff_id <- ssb01_temp32_vs_temp25_diff[,1]
+write.csv(ssb01_temp32_vs_temp25_diff_id, file = 'ssb01_temp32_vs_temp25_diff_id.csv', row.names = FALSE)
+```
+
+```{r}
+sessionInfo()
+```
